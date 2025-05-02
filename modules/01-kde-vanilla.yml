@@ -1,0 +1,48 @@
+# Minimal and Stable KDE Plasma Desktop Build
+me: Atomic KDE Plasma Desktop
+id: kde-plasma-stable
+vibversion: 1.0.0
+
+stages:
+  - id: build
+    base: ghcr.io/AuruOS/base:main  # Base image from trusted source
+    addincludes: true
+    labels:
+      DEBIAN_FRONTEND: noninteractive  # Prevent interactive APT dialogs
+
+    runs:
+      commands:
+        # Do not install any suggested or recommended packages to keep system atomic
+        - echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/00no-recommends
+        - echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00no-recommends
+
+    modules:
+
+      - name: system-update
+        type: shell
+        commands:
+          - apt update
+          - apt full-upgrade -y
+          - apt clean
+
+      - name: plasma-core
+        type: shell
+        commands:
+          # Install only the base Plasma shell and SDDM (no extra apps)
+          - apt install -y --no-install-recommends kde-plasma-desktop sddm
+
+      - name: sddm-enable
+        type: shell
+        commands:
+          # Ensure the display manager is active by default
+          - systemctl enable sddm
+
+      - name: polish-config
+        type: shell
+        commands:
+          # Clean and prepare the system to be reproducible and minimal
+          - rm -rf /var/lib/apt/lists/*
+          - rm -rf /tmp/*
+          - rm -rf /var/tmp/*
+          - apt autoremove -y
+          - apt clean

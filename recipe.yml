@@ -1,0 +1,84 @@
+# Image metadata
+me: vanilla Plasma Desktop
+id: vanilla-plasma
+vibversion: 1.0.2
+
+stages:
+  - id: build
+    base: ghcr.io/AuruOS/base:main  # Base container image
+    addincludes: true
+    labels:
+      DEBIAN_FRONTEND: noninteractive  # Disable APT interactive prompts
+
+    runs:
+      commands:
+        # Enable installation of recommended packages
+        - echo 'APT::Install-Recommends "1";' > /etc/apt/apt.conf.d/01norecommends
+
+    modules:
+
+      - name: init-setup
+        type: shell
+        commands:
+          - lpkg --unlock         # Unlock package manager
+          - apt update            # Update APT package index
+          - apt upgrade -y        # Upgrade installed packages
+          - apt clean             # Clean APT cache
+
+      - name: vanilla-tools
+        type: shell
+        sources:
+          - type: tar
+            # Use production build in production environment
+            url: https://github.com/Vanilla-OS/vanilla-tools/releases/download/continuous/vanilla-tools.tar.gz
+        commands:
+          - mkdir -p /usr/bin
+          - cp /sources/vanilla-tools/vanilla-tools/vanilla-tools/lpkg /usr/bin/lpkg
+          - cp /sources/vanilla-tools/vanilla-tools/vanilla-tools/cur-gpu /usr/bin/cur-gpu
+          - chmod +x /usr/bin/lpkg
+          - chmod +x /usr/bin/cur-gpu
+
+      - name: packages-modules
+        type: includes
+        includes:
+          # Include additional build modules
+          - modules/10-display-manager.yml
+          - modules/20-plasma-core.yml
+          - modules/30-plasma-essentials.yml
+          - modules/161-plasma-utilities.yml
+          - modules/200-plasma-common.yml
+          - modules/999-cleanup.yml
+
+      - name: cleanup
+        type: shell
+        commands:
+          - apt autoremove -y    # Remove unused packages
+          - apt clean            # Clean APT cache
+          - lpkg --lock          # Lock package manager
+
+      - name: sysconf-setup
+        type: shell
+        commands:
+          - rsync -a /etc/ /sysconf/  # Backup system configuration
+
+      - name: fsguard
+        type: fsguard
+        CustomFsGuard: false
+        FsGuardLocation: "/usr/sbin/FsGuard"
+        GenerateKey: true
+        FilelistPaths: ["/usr/bin"]
+        modules:
+          - name: remove-prev-fsguard
+            type: shell
+            commands:
+              - rm -rf /FsGuard                  # Remove previous FsGuard data
+              - rm -f ./minisign.pub ./minisign.key  # Remove old signing keys
+              - chmod +x /usr/share/init.d/010-fsguard.sh  # Ensure init script is executable
+
+      - name: cleanup2
+        type: shell
+        commands:
+          - rm -rf /tmp/*        # Clean up temporary files
+          - rm -rf /var/tmp/*
+          - rm -rf /sources      # Remove source files
+
